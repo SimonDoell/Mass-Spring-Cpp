@@ -340,11 +340,6 @@ int main() {
         while (window.pollEvent(ev)) {if (ev.type == sf::Event::Closed) {window.close();}}
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) {window.close();}
 
-        if (doMeshPusher) {
-            sim.meshes.emplace_back(Mesh());
-            sim.meshes.back().masses.emplace_back(Mass(window.mapPixelToCoords(sf::Mouse::getPosition(window)), 15.0f));
-        }
-
         MouseHandler::update(window);
         if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) sim.doMouseInteraction();
         sim.update();
