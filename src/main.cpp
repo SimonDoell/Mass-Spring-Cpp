@@ -12,6 +12,8 @@ int MAX_FRAMES = 60;
 
 
 // Math
+constexpr float PI = 3.14159265358979f;
+
 float len(const sf::Vector2f& v) {
     return sqrt(v.x*v.x + v.y*v.y);
 }
@@ -24,6 +26,23 @@ float dot(const sf::Vector2f& v1, const sf::Vector2f& v2) {
     return float(v1.x*v2.x + v1.y*v2.y);
 }
 
+float lerp(float from, float to, float percentage) {
+    return from + (to - from) * percentage;
+}
+
+float inverseLerp(float from, float to, float value) {
+    return (value - from) / (to - from);
+}
+
+float map(float value, float fromMin, float fromMax, float toMin, float toMax) {
+    float percentage = inverseLerp(fromMin, fromMax, value);
+    return lerp(toMin, toMax, percentage);
+}
+
+float mapClamp(float value, float fromMin, float fromMax, float toMin, float toMax) {
+    float percentage = std::clamp(inverseLerp(fromMin, fromMax, value), 0.0f, 1.0f);
+    return lerp(toMin, toMax, percentage);
+}
 
 struct Line {
     public:
@@ -70,6 +89,7 @@ sf::Vector2f MouseHandler::mousePos     = sf::Vector2f(0, 0);
 sf::Vector2f MouseHandler::lastMousePos = sf::Vector2f(0, 0);
 
 
+
 // Simulation classes
 struct Mass {
     public:
@@ -83,6 +103,7 @@ struct Mass {
 
         void move(float dt) {
             sf::Vector2f tempPos = pos;
+            // Verlet Integration for stability
             pos = 2.0f * pos - lastPos + acc * dt*dt;
             acc = sf::Vector2f(0, 0);  // Resets for easy accumalation of forces
             lastPos = tempPos;
@@ -104,8 +125,8 @@ struct Spring {
         unsigned int indexA;
         unsigned int indexB;
         float restLen;
-        float springConstant  = 300000.0f;
-        float dampingConstant = 10000.0f;
+        float springConstant  = 180000.0f;
+        float dampingConstant = 2500.0f;
 
         Spring(unsigned int _indexA, unsigned int _indexB, float _restLen) : indexA(_indexA), indexB(_indexB), restLen(_restLen) {}
 
@@ -153,7 +174,12 @@ struct Mesh {
             for (Spring& spring : springs) {
                 line.posA = masses[spring.indexA].pos;
                 line.posB = masses[spring.indexB].pos;
+                float seperation = (len(line.posB - line.posA) - spring.restLen) / spring.restLen;
+                float colVal = mapClamp(std::abs(seperation), 0, 0.05f, 50.0f, 255.0f);
 
+                sf::Color color = sf::Color(colVal, 255.0f-colVal, 0, colVal);
+
+                line.color = color;
                 line.render(window);
             }
 
@@ -191,7 +217,7 @@ namespace Make {
         float maxDist = sqrt(spacingX*spacingX + spacingY*spacingY);
 
         for (int i = 0; i < mesh.masses.size(); ++i) {
-            for (int k = i + 1; k < mesh.masses.size(); ++k) {
+            for (int k = 1 + i; k < mesh.masses.size(); ++k) {
                 float distance = len(mesh.masses[i].pos - mesh.masses[k].pos);
                 if (distance <= maxDist) {
                     mesh.springs.emplace_back(Spring(i, k, distance));
@@ -199,6 +225,37 @@ namespace Make {
             }
         }
 
+        return mesh;
+    }
+
+    Mesh circleMesh(const sf::Vector2f& centerPos, float radius, float amountMasses, float massRadius) {
+        Mesh mesh;
+
+        mesh.masses.emplace_back(Mass(centerPos, massRadius));
+
+        for (int i = 0; i < amountMasses; ++i) {
+            float angle = 2.0f * PI / (float)amountMasses * (float)i;
+            sf::Vector2f pos = sf::Vector2f(cos(angle), sin(angle)) * radius;
+            pos += centerPos;
+            mesh.masses.emplace_back(Mass(pos, massRadius));
+        }
+
+        for (int i = 1; i < mesh.masses.size(); ++i) {
+            float distance = len(centerPos - mesh.masses[i].pos);
+            mesh.springs.emplace_back(Spring(0, i, distance));
+        }
+
+        for (int i = 1; i < mesh.masses.size()-1; ++i) {
+            int indexA = i;
+            int indexB = i+1;
+            float distance = len(mesh.masses[indexA].pos - mesh.masses[indexB].pos);
+            mesh.springs.emplace_back(Spring(indexA, indexB, distance));
+        }
+
+        int indexA = 1;
+        int indexB = mesh.masses.size()-1;
+        float distance = len(mesh.masses[indexA].pos - mesh.masses[indexB].pos);
+        mesh.springs.emplace_back(Spring(indexA, indexB, distance));
 
         return mesh;
     }
@@ -208,10 +265,12 @@ struct Simulation {
     public:
         float dt = 1.0f / 240.0f;
         int iterationsPerUpdate = 4;
-        float boundBounceEnergyLoss = 0.95f;
+        float boundBounceEnergyLoss = 1.0f;
         std::vector<Mesh> meshes;
 
         Simulation() {}
+
+        void addMesh(Mesh mesh) {meshes.emplace_back(mesh);}
 
         void update() {
             for (int i = 0; i < iterationsPerUpdate; ++i) {
@@ -273,15 +332,21 @@ int main() {
 
 
     Simulation sim;
-    sim.meshes.emplace_back(Make::rectangleMesh({WIDTH/2.0f, HEIGHT/2.0f}, 350, 350, 8, 8, 15.0f));
+    sim.addMesh(Make::rectangleMesh({WIDTH/2.0f, HEIGHT/2.0f}, 350, 350, 8, 8, 15.0f));
+    // sim.addMesh(Make::circleMesh({500.0f, HEIGHT/2.0f}, 200.0f, 30, 15.0f));
 
 
     while (window.isOpen()) {
         while (window.pollEvent(ev)) {if (ev.type == sf::Event::Closed) {window.close();}}
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) {window.close();}
 
+        if (doMeshPusher) {
+            sim.meshes.emplace_back(Mesh());
+            sim.meshes.back().masses.emplace_back(Mass(window.mapPixelToCoords(sf::Mouse::getPosition(window)), 15.0f));
+        }
+
         MouseHandler::update(window);
-        if (sf::Mouse::isButtonPressed(sf::Mouse::Left)) sim.doMouseInteraction();
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) sim.doMouseInteraction();
         sim.update();
         
 
@@ -289,7 +354,6 @@ int main() {
         window.clear(sf::Color(31, 31, 31, 255));
         sim.render(window);
         window.display();
-
     }
     return 0;
 }
