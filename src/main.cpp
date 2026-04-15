@@ -217,7 +217,7 @@ struct Simulation {
             for (int i = 0; i < iterationsPerUpdate; ++i) {
                 for (Mesh& mesh : meshes) {
                     mesh.updateAcceleration(dt);
-                    checkBoundCollision();
+                    resolveBoundCollision();
                 }
             }
         }
@@ -228,7 +228,7 @@ struct Simulation {
             }
         }
 
-        void checkBoundCollision() {
+        void resolveBoundCollision() {
             const float eps = 1.0f;
 
             for (Mesh& mesh : meshes) {
