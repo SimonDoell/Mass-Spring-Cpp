@@ -1,0 +1,3 @@
+/home/simon/Desktop/GitHub_Proj/Mass-Spring-Cpp/build/CMakeFiles/Boilerplate_SFML.dir
+/home/simon/Desktop/GitHub_Proj/Mass-Spring-Cpp/build/CMakeFiles/edit_cache.dir
+/home/simon/Desktop/GitHub_Proj/Mass-Spring-Cpp/build/CMakeFiles/rebuild_cache.dir
